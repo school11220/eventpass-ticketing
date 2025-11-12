@@ -24,19 +24,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const merchantId = process.env.PHONEPE_MERCHANT_ID!;
-    const saltKey = process.env.PHONEPE_SALT_KEY!;
+    const merchantId = process.env.PHONEPE_MERCHANT_ID || 'DEMO_MERCHANT';
+    const saltKey = process.env.PHONEPE_SALT_KEY || 'demo_salt_key_12345';
     const saltIndex = process.env.PHONEPE_SALT_INDEX || '1';
+    const apiUrl = process.env.PHONEPE_API_URL || 'https://api.phonepe.com/apis/hermes';
 
     // Generate unique transaction ID
     const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
-    // Create PhonePe payment request
+    // Save order to database
+    const order = await createOrder({
+      eventId,
+      email,
+      name,
+      phone: phone || '',
+      amount,
+      razorpayOrderId: transactionId,
+    });
+
+    // Check if using real PhonePe credentials or demo mode
+    const isDemoMode = merchantId === 'DEMO_MERCHANT' || merchantId === 'your_merchant_id';
+
+    if (isDemoMode) {
+      // Demo mode: Return mock payment page URL
+      return NextResponse.json({
+        orderId: transactionId,
+        amount: amount * 100,
+        currency: 'INR',
+        dbOrderId: order.id,
+        paymentUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/mock-payment`,
+        isDemoMode: true,
+        base64Payload: Buffer.from(JSON.stringify({
+          transactionId,
+          dbOrderId: order.id,
+          amount,
+          email,
+          name
+        })).toString('base64'),
+        checksum: 'DEMO_CHECKSUM',
+        merchantId: merchantId
+      });
+    }
+
+    // Real PhonePe mode
     const paymentPayload = {
       merchantId: merchantId,
       merchantTransactionId: transactionId,
       merchantUserId: `USER_${Date.now()}`,
-      amount: amount * 100, // Amount in paise
+      amount: amount * 100,
       redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/phonepe-callback`,
       redirectMode: 'POST',
       callbackUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/phonepe-callback`,
@@ -46,29 +81,17 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // Encode payload to base64
     const base64Payload = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
-    
-    // Generate checksum: base64(payload) + '/pg/v1/pay' + saltKey
     const checksumString = base64Payload + '/pg/v1/pay' + saltKey;
     const checksum = crypto.createHash('sha256').update(checksumString).digest('hex') + '###' + saltIndex;
-
-    // Save order to database
-    const order = await createOrder({
-      eventId,
-      email,
-      name,
-      phone: phone || '',
-      amount,
-      razorpayOrderId: transactionId, // Using same field for PhonePe transaction ID
-    });
 
     return NextResponse.json({
       orderId: transactionId,
       amount: amount * 100,
       currency: 'INR',
       dbOrderId: order.id,
-      paymentUrl: 'https://api.phonepe.com/apis/hermes/pg/v1/pay',
+      paymentUrl: `${apiUrl}/pg/v1/pay`,
+      isDemoMode: false,
       base64Payload: base64Payload,
       checksum: checksum,
       merchantId: merchantId
