@@ -10,8 +10,9 @@ export async function GET(request: NextRequest) {
 
   const html = `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Mock PhonePe Payment</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
@@ -275,6 +276,8 @@ export async function GET(request: NextRequest) {
   `;
 
   return new NextResponse(html, {
-    headers: { 'Content-Type': 'text/html' },
+    headers: { 
+      'Content-Type': 'text/html; charset=utf-8',
+    },
   });
 }

@@ -107,13 +107,15 @@ export default function CheckInPage() {
     } catch (error: any) {
       console.error('Error starting scanner:', error);
       if (error.name === 'NotAllowedError') {
-        setCameraError('Camera access denied. Please allow camera permissions in your browser settings.');
+        setCameraError('Camera access denied. Please click "Allow" when your browser asks for camera permission. You may need to reload the page and try again.');
       } else if (error.name === 'NotFoundError') {
-        setCameraError('No camera found on this device.');
+        setCameraError('No camera found on this device. Please use manual entry below.');
       } else if (error.name === 'NotReadableError') {
-        setCameraError('Camera is already in use by another application.');
+        setCameraError('Camera is already in use by another application. Please close other apps using the camera and try again.');
+      } else if (error.name === 'NotSupportedError') {
+        setCameraError('Camera not supported on this browser. Please use Chrome, Firefox, or Safari, or use manual entry below.');
       } else {
-        setCameraError('Failed to start camera. Please try again or use manual entry.');
+        setCameraError('Failed to start camera. Please ensure you have granted camera permissions or use manual entry below.');
       }
       setScanning(false);
     }
@@ -251,16 +253,25 @@ export default function CheckInPage() {
             </button>
           </div>
 
-          {/* Camera Error Display */}
+          {/* Camera Error */}
           {cameraError && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
               <div className="flex items-start">
                 <svg className="w-6 h-6 text-yellow-600 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
-                <div>
+                <div className="flex-1">
                   <h3 className="font-semibold text-yellow-900 mb-1">Camera Access Issue</h3>
-                  <p className="text-yellow-800 text-sm">{cameraError}</p>
+                  <p className="text-yellow-800 text-sm mb-3">{cameraError}</p>
+                  <div className="bg-yellow-100 rounded-lg p-3">
+                    <p className="text-sm text-yellow-900 font-medium mb-2">💡 How to fix:</p>
+                    <ol className="text-sm text-yellow-800 space-y-1 ml-4 list-decimal">
+                      <li>Look for the camera icon in your browser's address bar</li>
+                      <li>Click it and select "Allow" for camera access</li>
+                      <li>Click "Start Scanning" again</li>
+                      <li>If that doesn't work, use "Manual Entry" below</li>
+                    </ol>
+                  </div>
                 </div>
               </div>
             </div>
