@@ -44,16 +44,19 @@ export async function POST(request: NextRequest) {
 
     // Check if using real PhonePe credentials or demo mode
     const isDemoMode = merchantId === 'DEMO_MERCHANT' || merchantId === 'your_merchant_id';
+    const isLocalhost = process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost');
 
-    if (isDemoMode) {
-      // Demo mode: Return mock payment page URL
+    // Use mock payment for localhost (PhonePe sandbox doesn't accept localhost URLs)
+    if (isDemoMode || isLocalhost) {
+      console.log('Using MOCK payment mode (localhost or demo credentials)');
       return NextResponse.json({
         orderId: transactionId,
         amount: amount * 100,
         currency: 'INR',
         dbOrderId: order.id,
-        paymentUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/mock-payment`,
+        paymentUrl: `/api/mock-phonepe-payment?transactionId=${transactionId}&amount=${amount * 100}&orderId=${order.id}`,
         isDemoMode: true,
+        useMock: true,
         base64Payload: Buffer.from(JSON.stringify({
           transactionId,
           dbOrderId: order.id,
@@ -67,15 +70,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Real PhonePe mode
+    // Clean phone number - remove country code if present and ensure 10 digits
+    let cleanPhone = phone?.replace(/\D/g, '') || '';
+    if (cleanPhone.startsWith('91')) {
+      cleanPhone = cleanPhone.substring(2);
+    }
+    cleanPhone = cleanPhone.substring(0, 10) || '9999999999';
+
     const paymentPayload = {
       merchantId: merchantId,
       merchantTransactionId: transactionId,
       merchantUserId: `USER_${Date.now()}`,
       amount: amount * 100,
-      redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/phonepe-callback`,
-      redirectMode: 'POST',
+      redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/phonepe-callback?orderId=${transactionId}`,
+      redirectMode: 'REDIRECT',
       callbackUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/phonepe-callback`,
-      mobileNumber: phone?.replace(/\D/g, '').substring(0, 10) || '9999999999',
+      mobileNumber: cleanPhone,
       paymentInstrument: {
         type: 'PAY_PAGE'
       }
@@ -85,8 +95,9 @@ export async function POST(request: NextRequest) {
     console.log('Transaction ID:', transactionId);
     console.log('Amount:', amount * 100);
     console.log('Merchant ID:', merchantId);
-    console.log('Mobile:', paymentPayload.mobileNumber);
+    console.log('Mobile (cleaned):', cleanPhone);
     console.log('Redirect URL:', paymentPayload.redirectUrl);
+    console.log('Payment Payload:', JSON.stringify(paymentPayload, null, 2));
 
     const base64Payload = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
     

@@ -82,6 +82,13 @@ export default function EventDetail() {
         throw new Error(orderData.error || 'Failed to create order');
       }
 
+      // Check if using mock payment (for localhost testing)
+      if (orderData.useMock) {
+        // Redirect directly to mock payment page
+        window.location.href = orderData.paymentUrl;
+        return;
+      }
+
       // Initiate payment via our proxy API
       const paymentResponse = await fetch('/api/initiate-payment', {
         method: 'POST',
