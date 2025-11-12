@@ -5,6 +5,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { paymentUrl, base64Payload, checksum } = body;
 
+    console.log('=== PhonePe Payment Initiation ===');
+    console.log('Payment URL:', paymentUrl);
+    console.log('Checksum:', checksum);
+    console.log('Payload (first 100 chars):', base64Payload.substring(0, 100));
+
     // Make request to PhonePe API
     const response = await fetch(paymentUrl, {
       method: 'POST',
@@ -19,6 +24,9 @@ export async function POST(request: NextRequest) {
     });
 
     const result = await response.json();
+    
+    console.log('PhonePe Response Status:', response.status);
+    console.log('PhonePe Response:', JSON.stringify(result, null, 2));
 
     if (!response.ok) {
       console.error('PhonePe API Error:', result);

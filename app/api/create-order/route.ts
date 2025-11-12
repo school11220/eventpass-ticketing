@@ -75,22 +75,40 @@ export async function POST(request: NextRequest) {
       redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/phonepe-callback`,
       redirectMode: 'POST',
       callbackUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/phonepe-callback`,
-      mobileNumber: phone || '',
+      mobileNumber: phone?.replace(/\D/g, '').substring(0, 10) || '9999999999',
       paymentInstrument: {
         type: 'PAY_PAGE'
       }
     };
 
+    console.log('=== Creating PhonePe Order ===');
+    console.log('Transaction ID:', transactionId);
+    console.log('Amount:', amount * 100);
+    console.log('Merchant ID:', merchantId);
+    console.log('Mobile:', paymentPayload.mobileNumber);
+    console.log('Redirect URL:', paymentPayload.redirectUrl);
+
     const base64Payload = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
-    const checksumString = base64Payload + '/pg/v1/pay' + saltKey;
-    const checksum = crypto.createHash('sha256').update(checksumString).digest('hex') + '###' + saltIndex;
+    
+    // Correct PhonePe checksum format: SHA256(base64Payload + endpoint + saltKey) + ### + saltIndex
+    const endpoint = '/pg/v1/pay';
+    const checksumString = base64Payload + endpoint + saltKey;
+    const sha256Hash = crypto.createHash('sha256').update(checksumString).digest('hex');
+    const checksum = sha256Hash + '###' + saltIndex;
+
+    console.log('Base64 Payload:', base64Payload);
+    console.log('Checksum Calculation:');
+    console.log('  - Endpoint:', endpoint);
+    console.log('  - Salt Key:', saltKey);
+    console.log('  - SHA256 Hash:', sha256Hash);
+    console.log('  - Final Checksum:', checksum);
 
     return NextResponse.json({
       orderId: transactionId,
       amount: amount * 100,
       currency: 'INR',
       dbOrderId: order.id,
-      paymentUrl: `${apiUrl}/pg/v1/pay`,
+      paymentUrl: `${apiUrl}${endpoint}`,
       isDemoMode: false,
       base64Payload: base64Payload,
       checksum: checksum,
