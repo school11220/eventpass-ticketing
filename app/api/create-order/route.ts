@@ -43,11 +43,12 @@ export async function POST(request: NextRequest) {
     });
 
     // Check if using real PhonePe credentials or demo mode
-    const isDemoMode = merchantId === 'DEMO_MERCHANT' || merchantId === 'your_merchant_id';
+    const isDemoMode = merchantId === 'DEMO_MERCHANT' || merchantId === 'your_merchant_id' || merchantId === 'MERCHANTUAT';
     const isLocalhost = process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost');
 
-    // Use mock payment for localhost (PhonePe sandbox doesn't accept localhost URLs)
-    if (isDemoMode || isLocalhost) {
+    // Use mock payment for demo/test mode
+    // NOTE: Remove this condition when you have real PhonePe production credentials
+    if (isDemoMode || isLocalhost || true) { // Always use mock for now
       console.log('Using MOCK payment mode (localhost or demo credentials)');
       return NextResponse.json({
         orderId: transactionId,

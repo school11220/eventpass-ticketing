@@ -68,10 +68,14 @@ export default function CheckInPage() {
       setCameraError('');
       setScanning(true);
 
+      console.log('Requesting camera permission...');
+
       // Request camera permissions explicitly
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment' } 
       });
+      
+      console.log('Camera permission granted!');
       
       // Stop the test stream immediately
       stream.getTracks().forEach(track => track.stop());
@@ -79,10 +83,12 @@ export default function CheckInPage() {
       const codeReader = new BrowserQRCodeReader();
       codeReaderRef.current = codeReader;
 
+      console.log('Listing video devices...');
       const videoInputDevices = await BrowserQRCodeReader.listVideoInputDevices();
+      console.log('Found', videoInputDevices.length, 'camera(s)');
 
       if (videoInputDevices.length === 0) {
-        setCameraError('No camera found on this device.');
+        setCameraError('No camera found on this device. Please use manual entry below.');
         setScanning(false);
         return;
       }
@@ -93,17 +99,25 @@ export default function CheckInPage() {
           device.label.toLowerCase().includes('back')
         ) || videoInputDevices[0];
 
+      console.log('Using camera:', selectedDevice.label);
+
       await codeReader.decodeFromVideoDevice(
         selectedDevice.deviceId,
         videoRef.current!,
         async (result, error) => {
           if (result) {
             const token = result.getText();
+            console.log('QR Code scanned:', token);
             await checkTicket(token);
             stopScanning();
           }
+          if (error && error.name !== 'NotFoundException') {
+            console.error('Scan error:', error);
+          }
         }
       );
+      
+      console.log('Camera started successfully!');
     } catch (error: any) {
       console.error('Error starting scanner:', error);
       if (error.name === 'NotAllowedError') {
@@ -113,9 +127,11 @@ export default function CheckInPage() {
       } else if (error.name === 'NotReadableError') {
         setCameraError('Camera is already in use by another application. Please close other apps using the camera and try again.');
       } else if (error.name === 'NotSupportedError') {
-        setCameraError('Camera not supported on this browser. Please use Chrome, Firefox, or Safari, or use manual entry below.');
+        setCameraError('Camera not supported on this browser. Please use Chrome, Firefox, or Safari on HTTPS, or use manual entry below.');
+      } else if (error.name === 'SecurityError') {
+        setCameraError('Camera blocked by browser security. Make sure you are using HTTPS, or use manual entry below.');
       } else {
-        setCameraError('Failed to start camera. Please ensure you have granted camera permissions or use manual entry below.');
+        setCameraError(`Failed to start camera: ${error.message || 'Unknown error'}. Please use manual entry below.`);
       }
       setScanning(false);
     }
