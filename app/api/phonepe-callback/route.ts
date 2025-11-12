@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { updateOrderPayment, createTicket } from '@/lib/db';
+import { sql } from '@vercel/postgres';
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,15 +59,71 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Handle GET request for redirect
+// Handle GET request for redirect (from mock payment or real PhonePe)
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const transactionId = searchParams.get('transactionId');
-  
-  if (transactionId) {
-    // Redirect to success page
-    return NextResponse.redirect(new URL(`/payment-success?transactionId=${transactionId}`, request.url));
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const merchantTransactionId = searchParams.get('merchantTransactionId') || searchParams.get('transactionId');
+    const code = searchParams.get('code');
+    const providerReferenceId = searchParams.get('providerReferenceId');
+    
+    console.log('=== PhonePe Callback GET ===');
+    console.log('Transaction ID:', merchantTransactionId);
+    console.log('Code:', code);
+    console.log('Provider Reference:', providerReferenceId);
+    
+    if (!merchantTransactionId) {
+      console.error('No transaction ID provided');
+      return NextResponse.redirect(new URL('/payment-failed', request.url));
+    }
+    
+    // Check if payment was successful
+    if (code === 'PAYMENT_SUCCESS') {
+      // Update order in database
+      await updateOrderPayment(merchantTransactionId, {
+        paymentId: providerReferenceId || merchantTransactionId,
+        signature: code,
+        status: 'completed'
+      });
+
+      // Get order details to create ticket
+      const order = await sql`
+        SELECT * FROM orders WHERE razorpay_order_id = ${merchantTransactionId}
+      `;
+
+      if (order.rows.length === 0) {
+        console.error('Order not found:', merchantTransactionId);
+        return NextResponse.redirect(new URL('/payment-failed', request.url));
+      }
+
+      const orderData = order.rows[0];
+      
+      // Generate QR token
+      const qrToken = crypto.randomBytes(32).toString('hex');
+
+      // Create ticket
+      const ticket = await createTicket({
+        orderId: orderData.id,
+        eventId: orderData.event_id,
+        qrToken: qrToken
+      });
+      
+      console.log('Payment successful, ticket created:', ticket.id);
+      
+      // Redirect to ticket page
+      return NextResponse.redirect(new URL(`/ticket/${ticket.id}`, request.url));
+    } else {
+      console.log('Payment failed or declined');
+      await updateOrderPayment(merchantTransactionId, {
+        paymentId: providerReferenceId || 'FAILED',
+        signature: code || 'FAILED',
+        status: 'failed'
+      });
+      
+      return NextResponse.redirect(new URL('/payment-failed', request.url));
+    }
+  } catch (error) {
+    console.error('Error processing callback:', error);
+    return NextResponse.redirect(new URL('/payment-failed', request.url));
   }
-  
-  return NextResponse.redirect(new URL('/payment-failed', request.url));
 }
