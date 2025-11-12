@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import Script from 'next/script';
 
 interface Event {
   id: string;
@@ -15,12 +16,20 @@ interface Event {
   image_url: string;
 }
 
+// Declare Razorpay on Window interface
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 export default function EventDetail() {
   const params = useParams();
   const router = useRouter();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -82,32 +91,77 @@ export default function EventDetail() {
         throw new Error(orderData.error || 'Failed to create order');
       }
 
-      // Check if using mock payment (for localhost testing)
+      // Check if using mock payment (for localhost testing without credentials)
       if (orderData.useMock) {
+        console.log('🧪 Using mock payment mode');
         // Redirect directly to mock payment page
         window.location.href = orderData.paymentUrl;
         return;
       }
 
-      // Initiate payment via our proxy API
-      const paymentResponse = await fetch('/api/initiate-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentUrl: orderData.paymentUrl,
-          base64Payload: orderData.base64Payload,
-          checksum: orderData.checksum,
-        }),
-      });
-
-      const result = await paymentResponse.json();
-      
-      if (result.success && result.data?.instrumentResponse?.redirectInfo?.url) {
-        // Redirect to PhonePe payment page
-        window.location.href = result.data.instrumentResponse.redirectInfo.url;
-      } else {
-        throw new Error(result.message || result.error || 'Payment initialization failed');
+      // Use Razorpay checkout
+      if (!razorpayLoaded || !window.Razorpay) {
+        throw new Error('Razorpay SDK not loaded. Please refresh and try again.');
       }
+
+      console.log('💳 Opening Razorpay checkout...');
+
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'ROBOFIESTA',
+        description: `Ticket for ${event?.name}`,
+        order_id: orderData.orderId,
+        prefill: {
+          name: formData.name,
+          email: formData.email,
+          contact: formData.phone,
+        },
+        theme: {
+          color: '#2563eb', // primary-600 blue
+        },
+        handler: async function (response: any) {
+          console.log('✅ Payment successful:', response);
+          
+          try {
+            // Verify payment on backend
+            const verifyResponse = await fetch('/api/razorpay-callback', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            const verifyData = await verifyResponse.json();
+
+            if (verifyResponse.ok && verifyData.success) {
+              // Redirect to ticket page with QR code
+              console.log('🎫 Redirecting to ticket:', verifyData.ticketId);
+              router.push(`/ticket/${verifyData.ticketId}`);
+            } else {
+              throw new Error(verifyData.error || 'Payment verification failed');
+            }
+          } catch (error) {
+            console.error('❌ Payment verification error:', error);
+            alert('Payment successful but verification failed. Please contact support with your payment ID.');
+            setProcessing(false);
+          }
+        },
+        modal: {
+          ondismiss: function() {
+            console.log('❌ Payment cancelled by user');
+            setProcessing(false);
+          }
+        }
+      };
+
+      const razorpayInstance = new window.Razorpay(options);
+      razorpayInstance.open();
+
     } catch (error) {
       console.error('Payment error:', error);
       alert(`Failed to process payment: ${error instanceof Error ? error.message : 'Please try again'}`);
@@ -163,6 +217,16 @@ export default function EventDetail() {
 
   return (
     <>
+      <Script
+        src="https://checkout.razorpay.com/v1/checkout.js"
+        onLoad={() => {
+          console.log('✅ Razorpay SDK loaded');
+          setRazorpayLoaded(true);
+        }}
+        onError={() => {
+          console.error('❌ Failed to load Razorpay SDK');
+        }}
+      />
       <Navbar />
       <main className="flex-1 bg-gray-50 py-12">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
