@@ -34,7 +34,7 @@ export default function Footer() {
           </div>
 
           <div className="text-center text-gray-400 text-sm">
-            <p>&copy; 2025 EventPass. All rights reserved.</p>
+            <p>&copy; 2025 ROBOFIESTA. All rights reserved.</p>
           </div>
         </div>
       </div>
