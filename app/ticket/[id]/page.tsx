@@ -28,19 +28,35 @@ export default function TicketPage() {
 
   const fetchTicket = async () => {
     try {
-      // In a real app, you'd fetch ticket details from an API
-      // For now, we'll generate a QR code based on the ticket ID
-      const response = await fetch('/api/generate-qr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          qrToken: params.id, // In production, use actual token
-        }),
-      });
+      // Fetch ticket details from API
+      const ticketResponse = await fetch(`/api/ticket/${params.id}`);
+      const ticketData = await ticketResponse.json();
 
-      const data = await response.json();
-      if (data.qrCode) {
-        setQrCode(data.qrCode);
+      if (ticketData.success && ticketData.ticket) {
+        setTicket({
+          id: ticketData.ticket.id,
+          eventName: ticketData.ticket.eventName,
+          eventDate: ticketData.ticket.eventDate,
+          venue: ticketData.ticket.venue,
+          attendeeName: ticketData.ticket.attendeeName,
+          attendeeEmail: ticketData.ticket.attendeeEmail,
+          checkedIn: ticketData.ticket.checkedIn,
+          qrToken: ticketData.ticket.qrToken,
+        });
+
+        // Generate QR code using the qr_token
+        const qrResponse = await fetch('/api/generate-qr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            qrToken: ticketData.ticket.qrToken,
+          }),
+        });
+
+        const qrData = await qrResponse.json();
+        if (qrData.qrCode) {
+          setQrCode(qrData.qrCode);
+        }
       }
     } catch (error) {
       console.error('Error fetching ticket:', error);
@@ -108,6 +124,60 @@ export default function TicketPage() {
                   <p className="text-sm text-gray-500 mt-4">
                     Ticket ID: {params.id}
                   </p>
+                </div>
+              )}
+
+              {/* Event Details */}
+              {ticket && (
+                <div className="bg-blue-50 rounded-xl p-6 mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    Event Details
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Event:</span>
+                      <span className="font-medium text-gray-900">
+                        {ticket.eventName}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Date:</span>
+                      <span className="font-medium text-gray-900">
+                        {new Date(ticket.eventDate).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Venue:</span>
+                      <span className="font-medium text-gray-900">
+                        {ticket.venue}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Attendee:</span>
+                      <span className="font-medium text-gray-900">
+                        {ticket.attendeeName}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Email:</span>
+                      <span className="font-medium text-gray-900">
+                        {ticket.attendeeEmail}
+                      </span>
+                    </div>
+                    {ticket.checkedIn && (
+                      <div className="flex justify-between pt-3 border-t border-blue-200">
+                        <span className="text-gray-600">Status:</span>
+                        <span className="font-medium text-green-600">
+                          ✓ Checked In
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

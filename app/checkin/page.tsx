@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { BrowserQRCodeReader } from '@zxing/browser';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
@@ -30,8 +30,8 @@ export default function CheckInPage() {
   const [manualToken, setManualToken] = useState('');
   const [processing, setProcessing] = useState(false);
   const [cameraError, setCameraError] = useState('');
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const codeReaderRef = useRef<BrowserQRCodeReader | null>(null);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const qrReaderRef = useRef<any>(null);
 
   useEffect(() => {
     // Check if admin is already logged in
@@ -68,85 +68,64 @@ export default function CheckInPage() {
       setCameraError('');
       setScanning(true);
 
-      console.log('Requesting camera permission...');
+      console.log('🎥 Initializing html5-qrcode scanner...');
 
-      // Request camera permissions explicitly
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
+      // Dynamically import to avoid SSR issues
+      const { Html5Qrcode } = await import('html5-qrcode');
       
-      console.log('Camera permission granted!');
-      
-      // Stop the test stream immediately
-      stream.getTracks().forEach(track => track.stop());
+      const qrReader = new Html5Qrcode("qr-reader");
+      qrReaderRef.current = qrReader;
 
-      const codeReader = new BrowserQRCodeReader();
-      codeReaderRef.current = codeReader;
+      const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0
+      };
 
-      console.log('Listing video devices...');
-      const videoInputDevices = await BrowserQRCodeReader.listVideoInputDevices();
-      console.log('Found', videoInputDevices.length, 'camera(s)');
-
-      if (videoInputDevices.length === 0) {
-        setCameraError('No camera found on this device. Please use manual entry below.');
-        setScanning(false);
-        return;
-      }
-
-      // Use back camera if available (for mobile)
-      const selectedDevice =
-        videoInputDevices.find((device: MediaDeviceInfo) =>
-          device.label.toLowerCase().includes('back')
-        ) || videoInputDevices[0];
-
-      console.log('Using camera:', selectedDevice.label);
-
-      await codeReader.decodeFromVideoDevice(
-        selectedDevice.deviceId,
-        videoRef.current!,
-        async (result, error) => {
-          if (result) {
-            const token = result.getText();
-            console.log('QR Code scanned:', token);
-            await checkTicket(token);
-            stopScanning();
-          }
-          if (error && error.name !== 'NotFoundException') {
-            console.error('Scan error:', error);
-          }
+      await qrReader.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+          console.log('✅ QR Code scanned:', decodedText);
+          checkTicket(decodedText);
+          stopScanning();
+        },
+        (errorMessage) => {
+          // Ignore scanning errors (just means no QR in view)
         }
       );
-      
-      console.log('Camera started successfully!');
+
+      console.log('✅ Scanner started successfully!');
     } catch (error: any) {
-      console.error('Error starting scanner:', error);
-      if (error.name === 'NotAllowedError') {
-        setCameraError('Camera access denied. Please click "Allow" when your browser asks for camera permission. You may need to reload the page and try again.');
+      console.error('❌ Camera error:', error);
+      
+      let errorMessage = '';
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        errorMessage = 'Camera access denied. Please allow camera permissions and try again.';
       } else if (error.name === 'NotFoundError') {
-        setCameraError('No camera found on this device. Please use manual entry below.');
+        errorMessage = 'No camera found. Please check your camera connection.';
       } else if (error.name === 'NotReadableError') {
-        setCameraError('Camera is already in use by another application. Please close other apps using the camera and try again.');
-      } else if (error.name === 'NotSupportedError') {
-        setCameraError('Camera not supported on this browser. Please use Chrome, Firefox, or Safari on HTTPS, or use manual entry below.');
-      } else if (error.name === 'SecurityError') {
-        setCameraError('Camera blocked by browser security. Make sure you are using HTTPS, or use manual entry below.');
+        errorMessage = 'Camera is in use by another application. Please close it and try again.';
       } else {
-        setCameraError(`Failed to start camera: ${error.message || 'Unknown error'}. Please use manual entry below.`);
+        errorMessage = `Camera error: ${error.message || 'Unknown error'}. Please use manual entry below.`;
       }
+      
+      setCameraError(errorMessage);
       setScanning(false);
     }
   };
 
   const stopScanning = () => {
-    if (codeReaderRef.current) {
-      // Stop all video streams
-      const videoElement = videoRef.current;
-      if (videoElement && videoElement.srcObject) {
-        const stream = videoElement.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-        videoElement.srcObject = null;
-      }
-      codeReaderRef.current = null;
+    if (qrReaderRef.current) {
+      qrReaderRef.current.stop()
+        .then(() => {
+          console.log('Scanner stopped');
+          qrReaderRef.current = null;
+        })
+        .catch((err: any) => {
+          console.error('Error stopping scanner:', err);
+        });
     }
     setScanning(false);
   };
@@ -327,19 +306,11 @@ export default function CheckInPage() {
                 </div>
               ) : (
                 <div>
-                  <div className="relative bg-black rounded-lg overflow-hidden mb-4">
-                    <video
-                      ref={videoRef}
-                      className="w-full"
-                      style={{ maxHeight: '400px' }}
-                    />
-                    <div className="absolute inset-0 border-4 border-primary-500 pointer-events-none">
-                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white"></div>
-                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white"></div>
-                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white"></div>
-                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white"></div>
-                    </div>
-                  </div>
+                  <div 
+                    id="qr-reader" 
+                    className="rounded-lg overflow-hidden mb-4"
+                    style={{ width: '100%' }}
+                  />
                   <button
                     onClick={stopScanning}
                     className="w-full bg-red-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"

@@ -14,19 +14,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify JWT token
-    let decoded: any;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET!);
-    } catch (err) {
-      return NextResponse.json(
-        { error: 'Invalid or expired ticket' },
-        { status: 401 }
-      );
-    }
+    console.log('🎫 Checking ticket with token:', token);
 
-    // Get ticket from database
+    // Get ticket from database using the qr_token directly (no JWT verification)
     const ticket = await getTicketByToken(token);
+
+    console.log('🎫 Ticket found:', ticket ? 'Yes' : 'No');
 
     if (!ticket) {
       return NextResponse.json(
@@ -96,19 +89,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify JWT token
-    let decoded: any;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET!);
-    } catch (err) {
-      return NextResponse.json(
-        { error: 'Invalid or expired ticket' },
-        { status: 401 }
-      );
-    }
+    console.log('🎫 Validating ticket with token:', token);
 
-    // Get ticket from database
+    // Get ticket from database using the qr_token directly (no JWT verification)
     const ticket = await getTicketByToken(token);
+
+    console.log('🎫 Ticket found:', ticket ? 'Yes' : 'No');
 
     if (!ticket) {
       return NextResponse.json(
