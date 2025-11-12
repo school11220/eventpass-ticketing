@@ -82,28 +82,28 @@ export default function EventDetail() {
         throw new Error(orderData.error || 'Failed to create order');
       }
 
-      // Redirect to PhonePe payment page
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = orderData.paymentUrl;
+      // Initiate payment via our proxy API
+      const paymentResponse = await fetch('/api/initiate-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentUrl: orderData.paymentUrl,
+          base64Payload: orderData.base64Payload,
+          checksum: orderData.checksum,
+        }),
+      });
 
-      const payloadInput = document.createElement('input');
-      payloadInput.type = 'hidden';
-      payloadInput.name = 'request';
-      payloadInput.value = orderData.base64Payload;
-      form.appendChild(payloadInput);
-
-      const checksumInput = document.createElement('input');
-      checksumInput.type = 'hidden';
-      checksumInput.name = 'X-VERIFY';
-      checksumInput.value = orderData.checksum;
-      form.appendChild(checksumInput);
-
-      document.body.appendChild(form);
-      form.submit();
+      const result = await paymentResponse.json();
+      
+      if (result.success && result.data?.instrumentResponse?.redirectInfo?.url) {
+        // Redirect to PhonePe payment page
+        window.location.href = result.data.instrumentResponse.redirectInfo.url;
+      } else {
+        throw new Error(result.message || result.error || 'Payment initialization failed');
+      }
     } catch (error) {
       console.error('Payment error:', error);
-      alert('Failed to process payment. Please try again.');
+      alert(`Failed to process payment: ${error instanceof Error ? error.message : 'Please try again'}`);
       setProcessing(false);
     }
   };
