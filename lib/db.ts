@@ -121,8 +121,8 @@ export async function getOrderStats() {
   const result = await sql`
     SELECT 
       COUNT(*) as total_orders,
-      SUM(CASE WHEN payment_status = 'success' THEN 1 ELSE 0 END) as successful_orders,
-      SUM(CASE WHEN payment_status = 'success' THEN amount ELSE 0 END) as total_revenue
+      SUM(CASE WHEN payment_status = 'completed' THEN 1 ELSE 0 END) as successful_orders,
+      SUM(CASE WHEN payment_status = 'completed' THEN amount ELSE 0 END) as total_revenue
     FROM orders
   `;
   return result.rows[0];
@@ -138,9 +138,9 @@ export async function getEventStats() {
       COUNT(DISTINCT o.id) as total_sales,
       COUNT(DISTINCT t.id) as total_tickets,
       SUM(CASE WHEN t.checked_in = true THEN 1 ELSE 0 END) as checked_in_count,
-      SUM(CASE WHEN o.payment_status = 'success' THEN o.amount ELSE 0 END) as revenue
+      SUM(CASE WHEN o.payment_status = 'completed' THEN o.amount ELSE 0 END) as revenue
     FROM events e
-    LEFT JOIN orders o ON e.id = o.event_id AND o.payment_status = 'success'
+    LEFT JOIN orders o ON e.id = o.event_id AND o.payment_status = 'completed'
     LEFT JOIN tickets t ON e.id = t.event_id
     GROUP BY e.id, e.name, e.date, e.venue
     ORDER BY e.date DESC
