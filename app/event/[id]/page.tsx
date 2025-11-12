@@ -5,12 +5,6 @@ import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
-
 interface Event {
   id: string;
   name: string;
@@ -35,7 +29,6 @@ export default function EventDetail() {
 
   useEffect(() => {
     fetchEvent();
-    loadRazorpayScript();
   }, [params.id]);
 
   const fetchEvent = async () => {
@@ -50,13 +43,6 @@ export default function EventDetail() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadRazorpayScript = () => {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    document.body.appendChild(script);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,53 +82,28 @@ export default function EventDetail() {
         throw new Error(orderData.error || 'Failed to create order');
       }
 
-      // Initialize Razorpay payment
-      const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: orderData.amount,
-        currency: orderData.currency,
-        name: 'EventPass',
-        description: event?.name,
-        order_id: orderData.orderId,
-        handler: async function (response: any) {
-          // Verify payment
-          const verifyResponse = await fetch('/api/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              eventId: event?.id,
-              email: formData.email,
-            }),
-          });
+      // Redirect to PhonePe payment page
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = orderData.paymentUrl;
 
-          const verifyData = await verifyResponse.json();
+      const payloadInput = document.createElement('input');
+      payloadInput.type = 'hidden';
+      payloadInput.name = 'request';
+      payloadInput.value = orderData.base64Payload;
+      form.appendChild(payloadInput);
 
-          if (verifyData.success) {
-            // Redirect to success page
-            router.push(`/ticket/${verifyData.ticketId}`);
-          } else {
-            alert('Payment verification failed. Please contact support.');
-          }
-        },
-        prefill: {
-          name: formData.name,
-          email: formData.email,
-          contact: formData.phone,
-        },
-        theme: {
-          color: '#0ea5e9',
-        },
-      };
+      const checksumInput = document.createElement('input');
+      checksumInput.type = 'hidden';
+      checksumInput.name = 'X-VERIFY';
+      checksumInput.value = orderData.checksum;
+      form.appendChild(checksumInput);
 
-      const razorpay = new window.Razorpay(options);
-      razorpay.open();
+      document.body.appendChild(form);
+      form.submit();
     } catch (error) {
       console.error('Payment error:', error);
       alert('Failed to process payment. Please try again.');
-    } finally {
       setProcessing(false);
     }
   };
